@@ -3,23 +3,19 @@ import Cycle from "@cycle/xstream-run";
 import {makeDOMDriver} from "@cycle/dom";
 let app = require("./app").default;
 
-function preventDefaultSinkDriver(prevented$) {
-    prevented$.addListener({
-        next: ev => {
-            ev.preventDefault();
-            if (ev.type === "blur") {
-                ev.target.focus();
-            }
+function TitleDriver(title$) {
+    title$.addListener({
+        next: title => {
+            document.querySelector("title").textContent = title;
         },
         error: () => {},
-        complete: () => {}
+        complete: () => {},
     });
-    return xs.empty();
 }
 
 const drivers = {
     DOM: makeDOMDriver("#main"),
-    preventDefault: preventDefaultSinkDriver
+    Title: TitleDriver,
 };
 
 const {sinks, sources, run} = Cycle(app, drivers);

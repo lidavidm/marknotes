@@ -64,6 +64,7 @@ export default function app(sources) {
     const state$ = model(actions);
     const sinks = {
         DOM: view(noteTitle, state$),
+        Title: noteTitle.value$.map(title => "Mark Notes: Editing " + title),
     };
 
     return sinks;
