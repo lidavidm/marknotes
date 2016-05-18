@@ -20,13 +20,16 @@
     "browserify": "^11.0.1",
     "eslint": "^2.10.1",
     "mkdirp": "^0.5.x",
+    "node-sass": "^3.7.0",
+    "parallelshell": "^2.0.0",
     "watchify": "^3.7.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "prebrowserify": "mkdirp dist",
     "browserify": "browserify -d src/main.js -t babelify --outfile dist/main.js",
-    "start": "npm install && npm run browserify && echo 'OPEN index.html IN YOUR BROWSER'",
-    "live": "watchify -d -v -t babelify src/main.js -o dist/main.js"
+    "watch-js": "watchify -d -v -t babelify src/main.js -o dist/main.js",
+    "watch-sass": "node-sass -wr *.scss -o dist/",
+    "live": "parallelshell 'npm run watch-js' 'npm run watch-sass'"
   }
 }

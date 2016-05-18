@@ -10,17 +10,29 @@ const parser = md().use(mdTaskLists);
 
 function EditableTitle(sources) {
     const initialValue$ = sources.props$.map(props => props.initial);
-    const newValue$ = sources.DOM.select("h1").events("input").map(ev => ev.target.textContent);
+    const newValue$ = sources.DOM.select("input").events("input").map(ev => ev.target.value);
 
     const value$ = initialValue$.merge(newValue$).remember();
 
     const view$ = xs.combine((title) => {
-        return dom.h1({ props: { contentEditable: true } }, title);
+        return dom.h1([dom.input({ props: { type: "text", value: title } })]);
     }, value$);
 
     const sinks = {
         DOM: view$,
         value$,
+    };
+
+    return sinks;
+}
+
+function DocumentList(sources) {
+    const view$ = xs.combine((documents) => {
+        return dom.nav("#document-list", documents.map(document => dom.div(document.title)));
+    }, sources.documentList$);
+
+    const sinks = {
+        DOM: view$,
     };
 
     return sinks;
@@ -34,22 +46,47 @@ function intent(DOM) {
     };
 }
 
-function model(actions) {
+function model(actions, currentTitle$) {
+    const currentIndex$ = xs.of(0).remember();
+    const documentList = [{
+        title: "New Note",
+    }];
+
     return {
-        currentDocument$: actions.changeSource$.startWith(""),
+        currentIndex$: currentIndex$,
+        documentList$: xs.combine((index, title) => {
+            documentList[index].title = title;
+            return documentList;
+        }, currentIndex$, currentTitle$).startWith(documentList).remember(),
+        currentDocument$: xs.combine((title, body) => {
+            return {
+                title: title,
+                body: body,
+            };
+        }, currentTitle$, actions.changeSource$).startWith({
+            title: "New Note",
+            body: "Enter your note here.",
+        }),
     };
 }
 
-function view(noteTitle, state) {
-    return xs.combine((titleVTree, markdown, title) => {
+function view(documentList, noteTitle, state) {
+    return xs.combine((documentListVTree, titleVTree, document) => {
         return dom.div([
-            dom.textarea(),
-            titleVTree,
-            dom.div({
-                props: { innerHTML: parser.render(markdown) }
-            }),
+            documentListVTree,
+            dom.h("article#current-document", [
+                titleVTree,
+                dom.h("section.body", [
+                    dom.textarea({
+                        props: { value: document.body },
+                    }),
+                    dom.article({
+                        props: { innerHTML: parser.render(document.body) }
+                    }),
+                ]),
+            ]),
         ]);
-    }, noteTitle.DOM, state.currentDocument$, noteTitle.value$);
+    }, documentList.DOM, noteTitle.DOM, state.currentDocument$);
 }
 
 export default function app(sources) {
@@ -61,9 +98,15 @@ export default function app(sources) {
     });
 
     const actions = intent(sources.DOM);
-    const state$ = model(actions);
+    const state = model(actions, noteTitle.value$);
+
+    const documentList = isolate(DocumentList)({
+        DOM: sources.DOM,
+        documentList$: state.documentList$,
+    });
+
     const sinks = {
-        DOM: view(noteTitle, state$),
+        DOM: view(documentList, noteTitle, state),
         Title: noteTitle.value$.map(title => "Mark Notes: Editing " + title),
     };
 

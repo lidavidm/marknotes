@@ -1,0 +1,55 @@
+$primary: #5A98FA;
+$accent: #FFBE4B;
+$dark-gray: #3C4554;
+$light-gray: #F9FAFC;
+
+body, * {
+    color: $dark-gray;
+}
+
+#main > div {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    display: flex;
+}
+
+#document-list {
+    width: 250px;
+}
+
+#current-document {
+    height: 100%;
+    width: calc(100% - 250px);
+
+    padding: 1rem;
+    box-sizing: border-box;
+
+    box-shadow: -2px 0px 5px $dark-gray;
+
+    h1 {
+        input {
+            border: none;
+            border-bottom: 1px solid transparent;
+
+            &:focus {
+                border-bottom: 1px dotted $dark-gray;
+            }
+        }
+    }
+
+    .body {
+        display: flex;
+
+        > textarea, > article {
+            width: 50%;
+        }
+
+        > textarea {
+            resize: vertical;
+        }
+    }
+}
