@@ -27,9 +27,15 @@ function EditableTitle(sources) {
 }
 
 function DocumentList(sources) {
-    const view$ = xs.combine((documents) => {
-        return dom.nav("#document-list", documents.map(document => dom.div(document.title)));
-    }, sources.documentList$);
+    const view$ = xs.combine((documents, currentIndex) => {
+        const list = documents.map(
+            (document, index) =>
+                dom.li({ class: { active: index === currentIndex } }, document.title));
+        list.push(dom.h("li.add-document", [ dom.button("New Document") ]));
+        return dom.h("nav#document-list", [
+            dom.ul(list),
+        ]);
+    }, sources.documentList$, sources.currentIndex$);
 
     const sinks = {
         DOM: view$,
@@ -49,7 +55,7 @@ function intent(DOM) {
 function model(actions, currentTitle$) {
     const currentIndex$ = xs.of(0).remember();
     const documentList = [{
-        title: "New Note",
+        title: "New Document",
     }];
 
     return {
@@ -64,13 +70,13 @@ function model(actions, currentTitle$) {
                 body: body,
             };
         }, currentTitle$, actions.changeSource$).startWith({
-            title: "New Note",
-            body: "Enter your note here.",
+            title: "New Document",
+            body: "Enter your document here.",
         }),
     };
 }
 
-function view(documentList, noteTitle, state) {
+function view(documentList, documentTitle, state) {
     return xs.combine((documentListVTree, titleVTree, document) => {
         return dom.div([
             documentListVTree,
@@ -86,28 +92,29 @@ function view(documentList, noteTitle, state) {
                 ]),
             ]),
         ]);
-    }, documentList.DOM, noteTitle.DOM, state.currentDocument$);
+    }, documentList.DOM, documentTitle.DOM, state.currentDocument$);
 }
 
 export default function app(sources) {
-    const noteTitle = isolate(EditableTitle)({
+    const documentTitle = isolate(EditableTitle)({
         DOM: sources.DOM,
         props$: xs.of({
-            initial: "New Note",
+            initial: "New Document",
         }),
     });
 
     const actions = intent(sources.DOM);
-    const state = model(actions, noteTitle.value$);
+    const state = model(actions, documentTitle.value$);
 
     const documentList = isolate(DocumentList)({
         DOM: sources.DOM,
         documentList$: state.documentList$,
+        currentIndex$: state.currentIndex$,
     });
 
     const sinks = {
-        DOM: view(documentList, noteTitle, state),
-        Title: noteTitle.value$.map(title => "Mark Notes: Editing " + title),
+        DOM: view(documentList, documentTitle, state),
+        Title: documentTitle.value$.map(title => "Mark Notes: Editing " + title),
     };
 
     return sinks;

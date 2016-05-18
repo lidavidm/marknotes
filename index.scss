@@ -19,6 +19,50 @@ body, * {
 
 #document-list {
     width: 250px;
+
+    ul {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    li {
+        padding: 1rem;
+        cursor: pointer;
+
+        border-left: 10px solid transparent;
+
+        transition: background-color 0.3s ease-in-out;
+
+        &:hover {
+            background: $light-gray;
+        }
+
+        &.active {
+            border-color: $primary;
+        }
+
+        &.add-document {
+            border: 0;
+            padding: 0;
+
+            button {
+                padding: 1rem 1rem 1rem 0;
+                width: 100%;
+                text-align: left;
+                cursor: pointer;
+                border: 0;
+                background: none;
+
+                &:before {
+                    content: "+";
+                    width: calc(10px + 1rem);
+                    display: inline-block;
+                    text-align: center;
+                }
+            }
+        }
+    }
 }
 
 #current-document {
