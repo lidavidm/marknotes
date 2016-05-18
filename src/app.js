@@ -27,6 +27,16 @@ function EditableTitle(sources) {
 }
 
 function DocumentList(sources) {
+    const currentIndex$ = xs.of(0).remember();
+    const documentList = [{
+        title: "New Document",
+    }];
+
+    const documentList$ = xs.combine((index, title) => {
+        documentList[index].title = title;
+        return documentList;
+    }, currentIndex$, sources.currentTitle$).startWith(documentList).remember();
+
     const view$ = xs.combine((documents, currentIndex) => {
         const list = documents.map(
             (document, index) =>
@@ -35,10 +45,12 @@ function DocumentList(sources) {
         return dom.h("nav#document-list", [
             dom.ul(list),
         ]);
-    }, sources.documentList$, sources.currentIndex$);
+    }, documentList$, currentIndex$);
 
     const sinks = {
         DOM: view$,
+        currentIndex$,
+        documentList$,
     };
 
     return sinks;
@@ -52,18 +64,10 @@ function intent(DOM) {
     };
 }
 
-function model(actions, currentTitle$) {
-    const currentIndex$ = xs.of(0).remember();
-    const documentList = [{
-        title: "New Document",
-    }];
-
+function model(actions, currentTitle$, documentList$, currentIndex$) {
     return {
-        currentIndex$: currentIndex$,
-        documentList$: xs.combine((index, title) => {
-            documentList[index].title = title;
-            return documentList;
-        }, currentIndex$, currentTitle$).startWith(documentList).remember(),
+        currentIndex$,
+        documentList$,
         currentDocument$: xs.combine((title, body) => {
             return {
                 title: title,
@@ -103,14 +107,13 @@ export default function app(sources) {
         }),
     });
 
-    const actions = intent(sources.DOM);
-    const state = model(actions, documentTitle.value$);
-
     const documentList = isolate(DocumentList)({
         DOM: sources.DOM,
-        documentList$: state.documentList$,
-        currentIndex$: state.currentIndex$,
+        currentTitle$: documentTitle.value$,
     });
+
+    const actions = intent(sources.DOM);
+    const state = model(actions, documentTitle.value$, documentList.documentList$, documentList.currentIndex$);
 
     const sinks = {
         DOM: view(documentList, documentTitle, state),
