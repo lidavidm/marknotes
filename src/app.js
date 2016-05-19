@@ -37,7 +37,7 @@ function model(sources, actions) {
         "documents": ["New Document 1"],
     });
 
-    const currentIndex$ = withLatestFrom((event, documents) => {
+    const currentIndexRaw$ = withLatestFrom((event, documents) => {
         if (event.event === "new_document") {
             return documents.documents.length - 1;
         }
@@ -47,6 +47,10 @@ function model(sources, actions) {
         throw "Invalid event: " + event.event;
     }, actions.newDocument$.merge(actions.changeDocument$), documentPersist$).startWith(0).remember();
 
+    const currentIndex$ = xs.combine((documents, rawIndex) => {
+        return Math.min(rawIndex, documents.documents.length - 1);
+    }, documentPersist$, currentIndexRaw$);
+
     const documentIndex$ = xs.combine((documents, index) => {
         return {
             document: documents,
@@ -54,7 +58,7 @@ function model(sources, actions) {
         };
     }, documentPersist$, currentIndex$);
 
-    const documentActions$ = actions.newDocument$.merge(actions.changeTitle$);
+    const documentActions$ = actions.newDocument$.merge(actions.changeTitle$).merge(actions.deleteDocument$);
 
     const documentList$ =
               documentPersist$.take(1).map(docs => docs.documents)
@@ -64,6 +68,9 @@ function model(sources, actions) {
                   }
                   else if (event.event === "new_title") {
                       persist.document.documents[persist.index] = event.title;
+                  }
+                  else if (event.event === "delete_document") {
+                      persist.document.documents.splice(persist.index, 1);
                   }
                   return persist.document.documents;
               }, documentActions$, documentIndex$));
