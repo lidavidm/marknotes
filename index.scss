@@ -1,7 +1,10 @@
 $primary: #5A98FA;
 $accent: #FFBE4B;
+$danger: #FF4B4B;
 $dark-gray: #3C4554;
 $light-gray: #F9FAFC;
+
+$sans-serif: sans-serif;
 
 body, * {
     color: $dark-gray;
@@ -90,13 +93,50 @@ body, * {
 
     font-family: noticia-text, serif;
 
-    h1 {
-        input {
-            border: none;
-            border-bottom: 1px solid transparent;
+    header {
+        h1 {
+            display: inline-block;
+            float: left;
 
-            &:focus {
+            input {
+                border: none;
+                border-bottom: 1px solid transparent;
+
+                &:focus {
+                    border-bottom: 1px dotted $dark-gray;
+                }
+            }
+        }
+
+        time {
+            float: right;
+            clear: right;
+
+            font-family: $sans-serif;
+            font-style: italic;
+
+            color: $dark-gray;
+        }
+
+        nav {
+            float: left;
+            margin-top: 2px; /* Align button borders with the title border */
+
+            font-family: $sans-serif;
+            font-size: 2rem;
+
+            button {
+                vertical-align: bottom; /* Align button borders with the title border */
+                font-size: 1rem;
+                border: 0;
+                background: none;
+                color: $dark-gray;
                 border-bottom: 1px dotted $dark-gray;
+
+                &.delete {
+                    color: $danger;
+                    border-bottom-color: $danger;
+                }
             }
         }
     }

@@ -24,6 +24,7 @@ function intent(sources) {
                 event: "new_body",
                 body: ev.target.value,
             })),
+        deleteDocument$: sources.DOM.select(".delete").events("click").mapTo({ event: "delete_document" }),
     };
 }
 
@@ -70,12 +71,15 @@ function model(sources, actions) {
     const currentDocumentPersist$ = currentIndex$.map(index => {
         return sources.PouchDB.getItem(index.toString(), {
             "body": "Enter your notes here.",
+            "created": Date.now(),
+            "modified": Date.now(),
         });
     }).flatten();
     const currentDocument$ = currentIndex$.map(_ => {
         return currentDocumentPersist$.take(1).merge(withLatestFrom((event, persist) => {
             if (event.event === "new_body") {
                 persist.body = event.body;
+                persist.modified = Date.now();
             }
             return persist;
         }, actions.changeBody$, currentDocumentPersist$));
@@ -103,12 +107,26 @@ function view(state) {
             dom.ul(list),
         ]);
 
+        const created = new Date(document.created);
+        const modified = new Date(document.modified);
+
         return dom.div([
             documentListVTree,
             dom.h("article#current-document", [
-                dom.h1({
-                    class: { title: true },
-                }, [dom.input({ props: { type: "text", value: documentList[currentIndex] } })]),
+                dom.header([
+                    dom.h1({
+                        class: { title: true },
+                    }, [dom.input({ props: { type: "text", value: documentList[currentIndex] } })]),
+                    dom.h("time.created", { attrs: {
+                        datetime: created.toISOString(),
+                    }}, ["Created ", created.toLocaleString()]),
+                    dom.h("time.modified", { attrs: {
+                        datetime: modified.toISOString(),
+                    }}, ["Modified ", modified.toLocaleString()]),
+                    dom.nav([
+                        dom.h("button.delete", "Delete"),
+                    ]),
+                ]),
                 dom.h("section.body", [
                     dom.textarea({
                         props: { value: document.body },
