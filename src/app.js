@@ -44,15 +44,31 @@ function model(sources, actions, currentTitle$) {
         "documents": ["New Document 1"],
     });
 
-    const documentList$ =
-              documentPersist$.take(1).map(docs => docs.documents)
-              .merge(withLatestFrom((_, documents) => {
-                  documents.documents.push("New Document");
-                  return documents.documents;
-              }, actions.newDocument$, documentPersist$));
     const currentIndex$ = withLatestFrom((_, documents) => {
         return documents.documents.length - 1;
     }, actions.newDocument$, documentPersist$).startWith(0).remember();
+
+    const documentIndex$ = xs.combine((documents, index) => {
+        return {
+            document: documents,
+            index: index,
+        };
+    }, documentPersist$, currentIndex$);
+
+    const documentActions$ = actions.newDocument$.mapTo({ event: "new_document" })
+              .merge(currentTitle$.compose(debounce(500)).map(newTitle => ({ event: "new_title", title: newTitle })));
+
+    const documentList$ =
+              documentPersist$.take(1).map(docs => docs.documents)
+              .merge(withLatestFrom((event, persist) => {
+                  if (event.event === "new_document") {
+                      persist.document.documents.push("New Document");
+                  }
+                  else if (event.event === "new_title") {
+                      persist.document.documents[persist.index] = event.title;
+                  }
+                  return persist.document.documents;
+              }, documentActions$, documentIndex$));
 
     return {
         documentPersist$,
