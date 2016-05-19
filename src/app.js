@@ -9,8 +9,11 @@ const parser = md().use(mdTaskLists);
 
 function intent(sources) {
     return {
-        newDocument$: sources.DOM.select(".add-document").events("click"),
-        changeTitle$: sources.DOM.select(".title").events("input").map(ev => ev.target.value),
+        newDocument$: sources.DOM.select(".add-document").events("click").mapTo({ event: "new_document" }),
+        changeTitle$: sources.DOM.select(".title").events("input").compose(debounce(500)).map(ev => ({
+            event: "new_title",
+            title: ev.target.value,
+        })),
         changeSource$: sources.DOM.select("textarea").events("keyup")
             .compose(debounce(250))
             .map(ev => ev.target.value),
@@ -37,8 +40,7 @@ function model(sources, actions) {
         };
     }, documentPersist$, currentIndex$);
 
-    const documentActions$ = actions.newDocument$.mapTo({ event: "new_document" })
-              .merge(actions.changeTitle$.compose(debounce(500)).map(newTitle => ({ event: "new_title", title: newTitle })));
+    const documentActions$ = actions.newDocument$.merge(actions.changeTitle$);
 
     const documentList$ =
               documentPersist$.take(1).map(docs => docs.documents)
@@ -52,19 +54,20 @@ function model(sources, actions) {
                   return persist.document.documents;
               }, documentActions$, documentIndex$));
 
+    const currentDocumentPersist$ = sources.PouchDB.getItem("0", {
+        "body": "Enter your notes here.",
+    });
+    const currentDocument$ = currentDocumentPersist$.take(1).merge(withLatestFrom((update, persist) => {
+        persist.body = update;
+        return persist;
+    }, actions.changeSource$, currentDocumentPersist$));
+
     return {
         documentPersist$,
         currentIndex$,
         documentList$,
-        currentDocument$: xs.combine((persist, body) => {
-            return {
-                title: persist.document.documents[persist.index],
-                body: body,
-            };
-        }, documentIndex$, actions.changeSource$).startWith({
-            title: "New Document",
-            body: "Enter your document here.",
-        }),
+        currentDocument$,
+        currentDocumentPersist$,
     };
 }
 
@@ -83,7 +86,7 @@ function view(state) {
             dom.h("article#current-document", [
                 dom.h1({
                     class: { title: true },
-                }, [dom.input({ props: { type: "text", value: document.title } })]),
+                }, [dom.input({ props: { type: "text", value: documentList[currentIndex] } })]),
                 dom.h("section.body", [
                     dom.textarea({
                         props: { value: document.body },
@@ -97,6 +100,10 @@ function view(state) {
     }, state.documentList$, state.currentIndex$, state.currentDocument$);
 }
 
+function persistWhen(persist$, event$) {
+    return withLatestFrom((_, persist) => persist, event$, persist$);
+}
+
 export default function app(sources) {
     const actions = intent(sources);
     const state = model(sources, actions);
@@ -104,9 +111,8 @@ export default function app(sources) {
     const sinks = {
         DOM: view(state),
         Title: state.currentDocument$.map(document => "Mark Notes: Editing " + document.title),
-        PouchDB: withLatestFrom((_, persist) => {
-            return persist;
-        }, state.documentList$, state.documentPersist$),
+        PouchDB: persistWhen(state.documentPersist$, state.documentList$)
+            .merge(persistWhen(state.currentDocumentPersist$, state.currentDocument$)),
     };
 
     return sinks;
