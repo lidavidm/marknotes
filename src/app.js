@@ -10,13 +10,20 @@ const parser = md().use(mdTaskLists);
 function intent(sources) {
     return {
         newDocument$: sources.DOM.select(".add-document").events("click").mapTo({ event: "new_document" }),
+        changeDocument$: sources.DOM.select("#document-list .document").events("click").map(ev => ({
+            event: "change_document",
+            index: parseInt(ev.target.dataset.index, 10),
+        })),
         changeTitle$: sources.DOM.select(".title").events("input").compose(debounce(500)).map(ev => ({
             event: "new_title",
             title: ev.target.value,
         })),
-        changeSource$: sources.DOM.select("textarea").events("keyup")
+        changeBody$: sources.DOM.select("textarea").events("keyup")
             .compose(debounce(250))
-            .map(ev => ev.target.value),
+            .map(ev => ({
+                event: "new_body",
+                body: ev.target.value,
+            })),
     };
 }
 
@@ -29,9 +36,14 @@ function model(sources, actions) {
         "documents": ["New Document 1"],
     });
 
-    const currentIndex$ = withLatestFrom((_, documents) => {
-        return documents.documents.length - 1;
-    }, actions.newDocument$, documentPersist$).startWith(0).remember();
+    const currentIndex$ = withLatestFrom((event, documents) => {
+        if (event.event === "new_document") {
+            return documents.documents.length - 1;
+        }
+        else if (event.event === "change_document") {
+            return event.index;
+        }
+    }, actions.newDocument$.merge(actions.changeDocument$), documentPersist$).startWith(0).remember();
 
     const documentIndex$ = xs.combine((documents, index) => {
         return {
@@ -46,7 +58,7 @@ function model(sources, actions) {
               documentPersist$.take(1).map(docs => docs.documents)
               .merge(withLatestFrom((event, persist) => {
                   if (event.event === "new_document") {
-                      persist.document.documents.push("New Document");
+                      persist.document.documents.push("New Document " + (persist.document.documents.length + 1));
                   }
                   else if (event.event === "new_title") {
                       persist.document.documents[persist.index] = event.title;
@@ -54,13 +66,19 @@ function model(sources, actions) {
                   return persist.document.documents;
               }, documentActions$, documentIndex$));
 
-    const currentDocumentPersist$ = sources.PouchDB.getItem("0", {
-        "body": "Enter your notes here.",
-    });
-    const currentDocument$ = currentDocumentPersist$.take(1).merge(withLatestFrom((update, persist) => {
-        persist.body = update;
-        return persist;
-    }, actions.changeSource$, currentDocumentPersist$));
+    const currentDocumentPersist$ = currentIndex$.map(index => {
+        return sources.PouchDB.getItem(index.toString(), {
+            "body": "Enter your notes here.",
+        });
+    }).flatten();
+    const currentDocument$ = currentIndex$.map(_ => {
+        return currentDocumentPersist$.take(1).merge(withLatestFrom((event, persist) => {
+            if (event.event === "new_body") {
+                persist.body = event.body;
+            }
+            return persist;
+        }, actions.changeBody$, currentDocumentPersist$));
+    }).flatten();
 
     return {
         documentPersist$,
@@ -75,7 +93,10 @@ function view(state) {
     return xs.combine((documentList, currentIndex, document) => {
         const list = documentList.map(
             (title, index) =>
-                dom.li({ class: { active: index === currentIndex } }, title));
+                dom.li({
+                    class: { active: index === currentIndex, document: true },
+                    attrs: { "data-index": index }
+                }, title));
         list.push(dom.h("li.add-document", [ dom.button("New Document") ]));
         const documentListVTree = dom.h("nav#document-list", [
             dom.ul(list),
@@ -110,7 +131,8 @@ export default function app(sources) {
 
     const sinks = {
         DOM: view(state),
-        Title: state.currentDocument$.map(document => "Mark Notes: Editing " + document.title),
+        Title: xs.combine((documents, index) => "Mark Notes: Editing " + documents[index],
+                          state.documentList$, state.currentIndex$),
         PouchDB: persistWhen(state.documentPersist$, state.documentList$)
             .merge(persistWhen(state.currentDocumentPersist$, state.currentDocument$)),
     };
