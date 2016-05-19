@@ -26,46 +26,36 @@ function EditableTitle(sources) {
     return sinks;
 }
 
-function DocumentList(sources) {
-    const currentIndex$ = xs.of(0).remember();
-    const documentList = [{
-        title: "New Document",
-    }];
-
-    const documentList$ = xs.combine((index, title) => {
-        documentList[index].title = title;
-        return documentList;
-    }, currentIndex$, sources.currentTitle$).startWith(documentList).remember();
-
-    const view$ = xs.combine((documents, currentIndex) => {
-        const list = documents.map(
-            (document, index) =>
-                dom.li({ class: { active: index === currentIndex } }, document.title));
-        list.push(dom.h("li.add-document", [ dom.button("New Document") ]));
-        return dom.h("nav#document-list", [
-            dom.ul(list),
-        ]);
-    }, documentList$, currentIndex$);
-
-    const sinks = {
-        DOM: view$,
-        currentIndex$,
-        documentList$,
-    };
-
-    return sinks;
-}
-
-function intent(DOM) {
+function intent(sources) {
     return {
-        changeSource$: DOM.select("textarea").events("keyup")
-            .compose(debounce(500))
+        newDocument$: sources.DOM.select(".add-document").events("click"),
+        changeSource$: sources.DOM.select("textarea").events("keyup")
+            .compose(debounce(250))
             .map(ev => ev.target.value),
     };
 }
 
-function model(actions, currentTitle$, documentList$, currentIndex$) {
+function withLatestFrom(combine, source, other) {
+    return other.map(o => source.map(s => combine(s, o))).flatten();
+}
+
+function model(sources, actions, currentTitle$) {
+    const documentPersist$ = sources.PouchDB.getItem("documents", {
+        "documents": ["New Document 1"],
+    });
+
+    const documentList$ =
+              documentPersist$.take(1).map(docs => docs.documents)
+              .merge(withLatestFrom((_, documents) => {
+                  documents.documents.push("New Document");
+                  return documents.documents;
+              }, actions.newDocument$, documentPersist$));
+    const currentIndex$ = withLatestFrom((_, documents) => {
+        return documents.documents.length - 1;
+    }, actions.newDocument$, documentPersist$).startWith(0).remember();
+
     return {
+        documentPersist$,
         currentIndex$,
         documentList$,
         currentDocument$: xs.combine((title, body) => {
@@ -80,8 +70,16 @@ function model(actions, currentTitle$, documentList$, currentIndex$) {
     };
 }
 
-function view(documentList, documentTitle, state) {
-    return xs.combine((documentListVTree, titleVTree, document) => {
+function view(documentTitle, state) {
+    return xs.combine((titleVTree, documentList, currentIndex, document) => {
+        const list = documentList.map(
+            (title, index) =>
+                dom.li({ class: { active: index === currentIndex } }, title));
+        list.push(dom.h("li.add-document", [ dom.button("New Document") ]));
+        const documentListVTree = dom.h("nav#document-list", [
+            dom.ul(list),
+        ]);
+
         return dom.div([
             documentListVTree,
             dom.h("article#current-document", [
@@ -96,7 +94,7 @@ function view(documentList, documentTitle, state) {
                 ]),
             ]),
         ]);
-    }, documentList.DOM, documentTitle.DOM, state.currentDocument$);
+    }, documentTitle.DOM, state.documentList$, state.currentIndex$, state.currentDocument$);
 }
 
 export default function app(sources) {
@@ -107,17 +105,15 @@ export default function app(sources) {
         }),
     });
 
-    const documentList = isolate(DocumentList)({
-        DOM: sources.DOM,
-        currentTitle$: documentTitle.value$,
-    });
-
-    const actions = intent(sources.DOM);
-    const state = model(actions, documentTitle.value$, documentList.documentList$, documentList.currentIndex$);
+    const actions = intent(sources);
+    const state = model(sources, actions, documentTitle.value$);
 
     const sinks = {
-        DOM: view(documentList, documentTitle, state),
+        DOM: view(documentTitle, state),
         Title: documentTitle.value$.map(title => "Mark Notes: Editing " + title),
+        PouchDB: withLatestFrom((_, persist) => {
+            return persist;
+        }, state.documentList$, state.documentPersist$),
     };
 
     return sinks;

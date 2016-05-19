@@ -1,7 +1,9 @@
 import xs from "xstream";
 import Cycle from "@cycle/xstream-run";
 import {makeDOMDriver} from "@cycle/dom";
-let app = require("./app").default;
+import app from "./app";
+
+import PouchDBDriver from "./pouchdb";
 
 function TitleDriver(title$) {
     title$.addListener({
@@ -16,6 +18,7 @@ function TitleDriver(title$) {
 const drivers = {
     DOM: makeDOMDriver("#main"),
     Title: TitleDriver,
+    PouchDB: PouchDBDriver,
 };
 
 const {sinks, sources, run} = Cycle(app, drivers);
