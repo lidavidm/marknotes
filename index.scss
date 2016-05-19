@@ -19,6 +19,8 @@ body, * {
 
 #document-list {
     width: 250px;
+    height: 100%;
+    overflow-y: auto;
 
     ul {
         list-style-type: none;
@@ -27,10 +29,11 @@ body, * {
     }
 
     li {
-        padding: 1rem;
+        padding: 1rem 1rem 1rem 0.25rem;
         cursor: pointer;
 
-        border-left: 10px solid transparent;
+        border-left: 1.5rem solid transparent;
+        border-bottom: 1px solid $dark-gray;
 
         transition: background-color 0.3s ease-in-out;
 
@@ -39,7 +42,7 @@ body, * {
         }
 
         &.active {
-            border-color: $primary;
+            border-left-color: $primary;
         }
 
         &.add-document {
@@ -47,7 +50,7 @@ body, * {
             padding: 0;
 
             button {
-                padding: 1rem 1rem 1rem 0;
+                padding: 0;
                 width: 100%;
                 text-align: left;
                 cursor: pointer;
@@ -56,9 +59,13 @@ body, * {
 
                 &:before {
                     content: "+";
-                    width: calc(10px + 1rem);
+                    width: 1.5rem;
                     display: inline-block;
                     text-align: center;
+                    color: white;
+                    background: $accent;
+                    margin-right: 0.25rem;
+                    padding: 1rem 0;
                 }
             }
         }
@@ -66,13 +73,22 @@ body, * {
 }
 
 #current-document {
+    display: flex;
+    flex-direction: column;
     height: 100%;
-    width: calc(100% - 250px);
+    position: absolute;
+    left: 250px;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    overflow-y: hidden;
 
     padding: 1rem;
     box-sizing: border-box;
 
     box-shadow: -2px 0px 5px $dark-gray;
+
+    font-family: noticia-text, serif;
 
     h1 {
         input {
@@ -87,13 +103,33 @@ body, * {
 
     .body {
         display: flex;
+        position: absolute;
+        top: 5.667rem;
+        left: 1rem;
+        right: 0;
+        bottom: 0;
 
         > textarea, > article {
             width: 50%;
+            flex: 1;
         }
 
         > textarea {
             resize: vertical;
+            font-family: source-code-pro, monospace;
+            padding-right: 1rem;
+            border: 0;
+            border-right: 1px solid $dark-gray;
+        }
+
+        > article {
+            padding-left: 1rem;
+            border-left: 1px solid $dark-gray;
+            overflow-y: auto;
+
+            p:first-child {
+                margin-top: 0;
+            }
         }
     }
 }

@@ -43,6 +43,7 @@ function model(sources, actions) {
         else if (event.event === "change_document") {
             return event.index;
         }
+        throw "Invalid event: " + event.event;
     }, actions.newDocument$.merge(actions.changeDocument$), documentPersist$).startWith(0).remember();
 
     const documentIndex$ = xs.combine((documents, index) => {
