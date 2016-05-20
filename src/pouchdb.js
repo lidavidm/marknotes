@@ -9,37 +9,46 @@ function handleRequest(db) {
     };
 }
 
-function pouchDBDriver(request$, runStreamAdapter) {
-    const db = new PouchDB("TODO");
-    window.xs = xs;
-    window.db = db;
+function makePouchDBDriver(localUrl, remoteUrl) {
+    var pouchDBDriver = function(request$, runStreamAdapter) {
+        const db = new PouchDB(localUrl);
 
-    request$.addListener({
-        next: handleRequest(db),
-        error: () => {},
-        complete: () => {},
-    });
+        if (typeof remoteUrl !== "undefined") {
+            const remoteDb = new PouchDB(remoteUrl);
 
-    const idChanges$ = xs.never();
-    db.changes({
-        since: "now",
-        live: true,
-    }).on("change", function(changes) {
-        console.log("Changing", changes.id);
-        idChanges$.shamefullySendNext(changes.id);
-    });
-
-    return {
-        getItem(key, initial) {
-            console.log("Subscribing", key);
-            db.get(key).then(val => {
-                item$.shamefullySendNext(val);
-            }).catch(_ => {
-                console.log("Initializing", key);
-                initial._id = key;
-                item$.shamefullySendNext(initial);
+            db.sync(remoteDb, {
+                live: true,
+                retry: true,
             });
-            const item$ =
+            // TODO: provide changed$, error$, etc streams?
+        }
+
+        request$.addListener({
+            next: handleRequest(db),
+            error: () => {},
+            complete: () => {},
+        });
+
+        const idChanges$ = xs.never();
+        db.changes({
+            since: "now",
+            live: true,
+        }).on("change", function(changes) {
+            console.log("Changing", changes.id);
+            idChanges$.shamefullySendNext(changes.id);
+        });
+
+        return {
+            getItem(key, initial) {
+                console.log("Subscribing", key);
+                db.get(key).then(val => {
+                    item$.shamefullySendNext(val);
+                }).catch(_ => {
+                    console.log("Initializing", key);
+                    initial._id = key;
+                    item$.shamefullySendNext(initial);
+                });
+                const item$ =
                       xs.empty()
                       .merge(
                           idChanges$
@@ -47,11 +56,14 @@ function pouchDBDriver(request$, runStreamAdapter) {
                               .map(id => xs.fromPromise(db.get(id)))
                               .flatten()
                       );
-            return runStreamAdapter.adapt(item$, XStreamAdapter.streamSubscribe);
-        },
+                return runStreamAdapter.adapt(item$, XStreamAdapter.streamSubscribe);
+            },
+        };
     };
+
+    pouchDBDriver.streamAdapter = XStreamAdapter;
+
+    return pouchDBDriver;
 }
 
-pouchDBDriver.streamAdapter = XStreamAdapter;
-
-export default pouchDBDriver;
+export default makePouchDBDriver;
