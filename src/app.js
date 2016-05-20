@@ -124,15 +124,16 @@ function view(state) {
                     dom.h1({
                         class: { title: true },
                     }, [dom.input({ props: { type: "text", value: documentList[currentIndex] } })]),
+                    dom.nav([
+                        dom.h("button.delete", "Delete"),
+                    ]),
+
                     dom.h("time.created", { attrs: {
                         datetime: created.toISOString(),
                     }}, ["Created ", created.toLocaleString()]),
                     dom.h("time.modified", { attrs: {
                         datetime: modified.toISOString(),
                     }}, ["Modified ", modified.toLocaleString()]),
-                    dom.nav([
-                        dom.h("button.delete", "Delete"),
-                    ]),
                 ]),
                 dom.h("section.body", [
                     dom.textarea({

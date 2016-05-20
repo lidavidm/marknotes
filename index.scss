@@ -97,6 +97,8 @@ body, * {
         h1 {
             display: inline-block;
             float: left;
+            height: 50px;
+            margin: 0;
 
             input {
                 border: none;
@@ -119,14 +121,17 @@ body, * {
         }
 
         nav {
+            position: relative;
             float: left;
-            margin-top: 2px; /* Align button borders with the title border */
 
             font-family: $sans-serif;
-            font-size: 2rem;
+            height: 50px;
 
             button {
-                vertical-align: bottom; /* Align button borders with the title border */
+                /* Align button borders with the title border */
+                position: absolute;
+                bottom: 3px;
+
                 font-size: 1rem;
                 border: 0;
                 background: none;
@@ -144,7 +149,7 @@ body, * {
     .body {
         display: flex;
         position: absolute;
-        top: 5.667rem;
+        top: calc(50px + 1rem);
         left: 1rem;
         right: 0;
         bottom: 0;
