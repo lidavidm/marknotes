@@ -9,6 +9,7 @@ const parser = md().use(mdTaskLists);
 
 function intent(sources) {
     return {
+        syncDocument$: sources.PouchDB.pullEvents$.map(id => ({ event: "sync_document", id: id })),
         newDocument$: sources.DOM.select(".add-document").events("click").mapTo({ event: "new_document" }),
         changeDocument$: sources.DOM.select("#document-list .document").events("click").map(ev => ({
             event: "change_document",
@@ -72,8 +73,12 @@ function model(sources, actions) {
                   else if (event.event === "delete_document") {
                       persist.document.documents.splice(persist.index, 1);
                   }
+                  else if (event.event == "sync_document") {
+                      console.log(event);
+                      // Do nothing
+                  }
                   return persist.document.documents;
-              }, documentActions$, documentIndex$));
+              }, documentActions$.merge(actions.syncDocument$), documentIndex$));
 
     const currentDocumentPersist$ = currentIndex$.map(index => {
         return sources.PouchDB.getItem(index.toString(), {

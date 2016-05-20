@@ -13,12 +13,38 @@ function makePouchDBDriver(localUrl, remoteUrl) {
     var pouchDBDriver = function(request$, runStreamAdapter) {
         const db = new PouchDB(localUrl);
 
+        const pullEvents$ = xs.never();
+
         if (typeof remoteUrl !== "undefined") {
+            console.log("Syncing to remote URL " + remoteUrl);
             const remoteDb = new PouchDB(remoteUrl);
 
-            db.sync(remoteDb, {
-                live: true,
-                retry: true,
+            // Do a non-live sync once, to make sure we are up-to-date
+            // and fire that event.
+            db.sync(remoteDb).on("complete", function() {
+                pullEvents$.shamefullySendNext(null);
+
+                db.sync(remoteDb, {
+                    live: true,
+                    retry: true,
+                }).on("change", function (info) {
+                    if (info.direction === "pull") {
+                        for (let doc of info.docs) {
+                            pullEvents$.shamefullySendNext(doc._id);
+                        }
+                    }
+                    console.log(info);
+                }).on("paused", function (err) {
+                    console.log("Paused", err);
+                }).on("active", function () {
+                    console.log("active");
+                }).on("denied", function (err) {
+                    console.log(err);
+                }).on("complete", function (info) {
+                    console.log("Complete", info);
+                }).on("error", function (err) {
+                    console.log(err);
+                });
             });
             // TODO: provide changed$, error$, etc streams?
         }
@@ -39,6 +65,7 @@ function makePouchDBDriver(localUrl, remoteUrl) {
         });
 
         return {
+            pullEvents$,
             getItem(key, initial) {
                 console.log("Subscribing", key);
                 db.get(key).then(val => {

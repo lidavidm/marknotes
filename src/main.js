@@ -18,7 +18,7 @@ function TitleDriver(title$) {
 const drivers = {
     DOM: makeDOMDriver("#main"),
     Title: TitleDriver,
-    PouchDB: makePouchDBDriver("marknotes", "http://marknotes.lidavidm.me:5894/marknotes"),
+    PouchDB: makePouchDBDriver("marknotes", "http://127.0.0.1:5984/marknotes"),
 };
 
 const {sinks, sources, run} = Cycle(app, drivers);
