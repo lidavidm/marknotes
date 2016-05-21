@@ -1,6 +1,7 @@
 import xs from "xstream";
 import debounce from "xstream/extra/debounce";
 import * as dom from "@cycle/dom";
+import * as uuid from "node-uuid";
 
 import md from "markdown-it";
 import mdTaskLists from "markdown-it-task-lists";
@@ -34,28 +35,43 @@ function withLatestFrom(combine, source, other) {
 }
 
 function model(sources, actions) {
+    // TODO: need to garbage-collect unreachable notes
+    const initDocument = [uuid.v4(), "New Document 1"];
     const documentPersist$ = sources.PouchDB.getItem("documents", {
-        "documents": ["New Document 1"],
+        // [key, title]
+        "documents": [initDocument],
     });
 
+    // [key, index]
     const currentIndexRaw$ = withLatestFrom((event, documents) => {
         if (event.event === "new_document") {
-            return documents.documents.length - 1;
+            return [uuid.v4(), documents.documents.length - 1];
         }
         else if (event.event === "change_document") {
-            return event.index;
+            return [documents.documents[event.index][0], event.index];
+        }
+        else if (event.event === "sync_document") {
+            // TODO: need to preserve which note the user is actually looking at
+            if (event.id === null) {
+                return [documents.documents[0][0], 0];
+            }
+            // TODO: handle case where other document is synced
         }
         throw "Invalid event: " + event.event;
-    }, actions.newDocument$.merge(actions.changeDocument$), documentPersist$).startWith(0).remember();
+    }, actions.newDocument$.merge(actions.changeDocument$).merge(actions.syncDocument$), documentPersist$).startWith([initDocument[0], 0]).remember();
 
     const currentIndex$ = xs.combine((documents, rawIndex) => {
-        return Math.min(rawIndex, documents.documents.length - 1);
+        if (rawIndex[1] > documents.documents.length - 1) {
+            return [documents.documents[documents.documents.length - 1][0], documents.documents.length - 1];
+        }
+        return rawIndex;
     }, documentPersist$, currentIndexRaw$);
 
     const documentIndex$ = xs.combine((documents, index) => {
         return {
             document: documents,
-            index: index,
+            id: index[0],
+            index: index[1],
         };
     }, documentPersist$, currentIndex$);
 
@@ -65,23 +81,27 @@ function model(sources, actions) {
               documentPersist$.take(1).map(docs => docs.documents)
               .merge(withLatestFrom((event, persist) => {
                   if (event.event === "new_document") {
-                      persist.document.documents.push("New Document " + (persist.document.documents.length + 1));
+                      persist.document.documents.push([
+                          uuid.v4(),
+                          "New Document " + (persist.document.documents.length + 1),
+                      ]);
                   }
                   else if (event.event === "new_title") {
-                      persist.document.documents[persist.index] = event.title;
+                      persist.document.documents[persist.index][1] = event.title;
                   }
                   else if (event.event === "delete_document") {
                       persist.document.documents.splice(persist.index, 1);
+                      // TODO: delete the document
                   }
-                  else if (event.event == "sync_document") {
+                  else if (event.event === "sync_document") {
                       console.log(event);
                       // Do nothing
                   }
                   return persist.document.documents;
               }, documentActions$.merge(actions.syncDocument$), documentIndex$));
 
-    const currentDocumentPersist$ = currentIndex$.map(index => {
-        return sources.PouchDB.getItem(index.toString(), {
+    const currentDocumentPersist$ = currentIndex$.map(([id, _index]) => {
+        return sources.PouchDB.getItem(id, {
             "body": "Enter your notes here.",
             "created": Date.now(),
             "modified": Date.now(),
@@ -93,8 +113,11 @@ function model(sources, actions) {
                 persist.body = event.body;
                 persist.modified = Date.now();
             }
+            else if (event.event === "sync_document") {
+                console.log("Synced document", event, persist);
+            }
             return persist;
-        }, actions.changeBody$, currentDocumentPersist$));
+        }, actions.changeBody$.merge(actions.syncDocument$), currentDocumentPersist$));
     }).flatten();
 
     return {
@@ -107,9 +130,9 @@ function model(sources, actions) {
 }
 
 function view(state) {
-    return xs.combine((documentList, currentIndex, document) => {
+    return xs.combine((documentList, [uuid, currentIndex], document) => {
         const list = documentList.map(
-            (title, index) =>
+            ([_id, title], index) =>
                 dom.li({
                     class: { active: index === currentIndex, document: true },
                     attrs: { "data-index": index }
@@ -128,7 +151,7 @@ function view(state) {
                 dom.header([
                     dom.h1({
                         class: { title: true },
-                    }, [dom.input({ props: { type: "text", value: documentList[currentIndex] } })]),
+                    }, [dom.input({ props: { type: "text", value: documentList[currentIndex][1] } })]),
                     dom.nav([
                         dom.h("button.delete", "Delete"),
                     ]),
