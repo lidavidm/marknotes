@@ -26,7 +26,8 @@ function intent(sources) {
                 event: "new_body",
                 body: ev.target.value,
             })),
-        deleteDocument$: sources.DOM.select(".delete").events("click").mapTo({ event: "delete_document" }),
+        deleteDocument$: sources.DOM.select(".delete").events("click")
+            .map(ev => ({ event: "delete_document", index: parseInt(ev.target.dataset.index, 10) })),
     };
 }
 
@@ -43,7 +44,11 @@ function model(sources, actions) {
     });
 
     // [key, index]
-    const currentIndexRaw$ = withLatestFrom((event, documents) => {
+    const indexActions$ = actions.newDocument$
+              .merge(actions.changeDocument$)
+              .merge(actions.syncDocument$)
+              .merge(actions.deleteDocument$);
+    const currentIndex$ = withLatestFrom((event, documents) => {
         if (event.event === "new_document") {
             return [uuid.v4(), documents.documents.length - 1];
         }
@@ -57,15 +62,15 @@ function model(sources, actions) {
             }
             // TODO: handle case where other document is synced
         }
-        throw "Invalid event: " + event.event;
-    }, actions.newDocument$.merge(actions.changeDocument$).merge(actions.syncDocument$), documentPersist$).startWith([initDocument[0], 0]).remember();
-
-    const currentIndex$ = xs.combine((documents, rawIndex) => {
-        if (rawIndex[1] > documents.documents.length - 1) {
-            return [documents.documents[documents.documents.length - 1][0], documents.documents.length - 1];
+        else if (event.event === "delete_document") {
+            let index = event.index;
+            if (event.index >= documents.documents.length) {
+                index = documents.documents.length - 1;
+            }
+            return [documents.documents[index][0], index];
         }
-        return rawIndex;
-    }, documentPersist$, currentIndexRaw$);
+        throw "Invalid event: " + event.event;
+    }, indexActions$, documentPersist$).startWith([initDocument[0], 0]).remember();
 
     const documentIndex$ = xs.combine((documents, index) => {
         return {
@@ -90,12 +95,15 @@ function model(sources, actions) {
                       persist.document.documents[persist.index][1] = event.title;
                   }
                   else if (event.event === "delete_document") {
+                      console.log("Deleting", persist.id);
                       persist.document.documents.splice(persist.index, 1);
                       // TODO: delete the document
                   }
                   else if (event.event === "sync_document") {
+                      // TODO: check if the initial document up there
+                      // is in the document list still; if not, delete
+                      // it
                       console.log(event);
-                      // Do nothing
                   }
                   return persist.document.documents;
               }, documentActions$.merge(actions.syncDocument$), documentIndex$));
@@ -145,6 +153,12 @@ function view(state) {
         const created = new Date(document.created);
         const modified = new Date(document.modified);
 
+        // Because we use xs.combine, the document list might update
+        // before the index does
+        if (currentIndex >= documentList.length) {
+            currentIndex -= 1;
+        }
+
         return dom.div([
             documentListVTree,
             dom.h("article#current-document", [
@@ -153,7 +167,9 @@ function view(state) {
                         class: { title: true },
                     }, [dom.input({ props: { type: "text", value: documentList[currentIndex][1] } })]),
                     dom.nav([
-                        dom.h("button.delete", "Delete"),
+                        dom.h("button.delete", {
+                            attrs: { "data-index": currentIndex },
+                        }, "Delete"),
                     ]),
 
                     dom.h("time.created", { attrs: {
