@@ -4,8 +4,13 @@ import PouchDB from "pouchdb";
 
 function handleRequest(db) {
     return (request) => {
-        console.log("Writing", request);
-        db.put(request);
+        switch (request.action) {
+        case "put":
+            db.put(request.document);
+            return;
+        default:
+            throw "Unknown action " + request.action;
+        }
     };
 }
 

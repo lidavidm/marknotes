@@ -193,7 +193,10 @@ function view(state) {
 }
 
 function persistWhen(persist$, event$) {
-    return withLatestFrom((_, persist) => persist, event$, persist$);
+    return withLatestFrom((_, persist) => ({
+        action: "put",
+        document: persist,
+    }), event$, persist$);
 }
 
 export default function app(sources) {
